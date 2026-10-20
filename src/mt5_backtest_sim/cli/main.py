@@ -25,6 +25,7 @@ from mt5_backtest_sim.execution.broker import SimulatedBroker
 from mt5_backtest_sim.market_data.csv_source import CsvTickSource
 from mt5_backtest_sim.market_data.ctf import CtfTickFile
 from mt5_backtest_sim.market_data.feeder import TickFeeder
+from mt5_backtest_sim.persistence.settings_store import data_folder_default
 from mt5_backtest_sim.persistence.simulation_store import load_simulation, save_simulation
 from mt5_backtest_sim.results.report_html import render_report
 from mt5_backtest_sim.results.statistics import compute_statistics
@@ -61,6 +62,29 @@ def _symbol_spec(args: argparse.Namespace) -> SymbolSpec:
         point=Decimal(1).scaleb(-args.digits),
         contract_size=Decimal(args.contract_size),
     )
+
+
+def command_download(args: argparse.Namespace) -> int:
+    """Fetch a tick history and write it into a .ctf container."""
+    from mt5_backtest_sim.market_data.dukascopy import download_ticks, find_symbol
+
+    symbol = find_symbol(args.symbol)
+    start = _parse_moment(args.start)
+    end = _parse_moment(args.end)
+    if start is None or end is None:
+        raise SystemExit("both --start and --end are required")
+    folder = Path(args.data_folder) if args.data_folder else data_folder_default()
+    target = folder / f"sim_ticks_{symbol.name}.ctf"
+
+    print(f"symbol    : {symbol.name} ({symbol.digits} digits)")
+    print(f"from      : {start:%Y-%m-%d %H:%M}")
+    print(f"to        : {end:%Y-%m-%d %H:%M}")
+    print(f"target    : {target}")
+
+    path, written = download_ticks(symbol, start, end, target)
+    print(f"ticks     : {written:,}")
+    print(f"written   : {path}")
+    return 0
 
 
 def _parse_moment(text: str | None) -> datetime | None:
@@ -255,6 +279,16 @@ def build_parser() -> argparse.ArgumentParser:
     report.add_argument("--out", required=True, help="write the HTML report to this path")
     report.add_argument("--title", help="title of the report")
     report.set_defaults(handler=command_report)
+
+    download = subparsers.add_parser("download", help="fetch a tick history")
+    download.add_argument("--symbol", required=True, help="symbol to fetch")
+    download.add_argument("--start", required=True, help="first hour, ISO 8601")
+    download.add_argument("--end", required=True, help="last hour, ISO 8601")
+    download.add_argument(
+        "--data-folder",
+        help="folder for the .ctf file; defaults to the reference data folder",
+    )
+    download.set_defaults(handler=command_download)
 
     return parser
 

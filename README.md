@@ -79,6 +79,19 @@ Replay a history through a strategy, save the run and write a report:
     --save out/run.sim --report out/report.html --json out/summary.json
 ```
 
+Fetch a history and write it into a `.ctf` container:
+
+```bash
+.venv\Scripts\python -m mt5_backtest_sim.cli.main download \
+    --symbol EURUSD --start 2022-01-01T00:00:00Z --end 2022-02-01T00:00:00Z
+```
+
+The download reads Dukascopy's hourly `bi5` files, which are LZMA streams of twenty
+byte tick records, and writes the result as `sim_ticks_<SYMBOL>.ctf` in the data
+folder — the same file name and the same container the reference data centre uses.
+Dukascopy refuses requests from many datacentre addresses; when that happens the
+download fails with a clear error and the tick data you already have is unaffected.
+
 Reopen a saved run and render its report again:
 
 ```bash
@@ -156,11 +169,14 @@ between the container and CSV without loss.
 
 ## Status
 
-Working end to end: tick replay, order lifecycle, bar aggregation, statistics, HTML
-report, saving and reopening a run, and the MetaTrader 5 bridge with a compiled
-expert advisor.
+Working end to end: tick download, tick replay, order lifecycle, bar aggregation,
+statistics, HTML report, saving and reopening a run, and the MetaTrader 5 bridge with
+a compiled expert advisor.
 
-Not built yet: a data downloader that fetches history from the upstream providers, a
-desktop user interface, and a way to drive the terminal from the simulator in the
-other direction (the expert currently reads the simulated market, it does not trade
-on it yet).
+Not built yet: a desktop user interface, and a way to drive the terminal from the
+simulator in the other direction (the expert currently reads the simulated market, it
+does not trade on it yet).
+
+The live download from Dukascopy could not be exercised from the machine this was
+built on — the provider refuses datacentre addresses. The parsing and the writing of
+the history are covered by tests that build the very bytes the provider serves.
