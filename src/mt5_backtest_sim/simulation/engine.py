@@ -17,11 +17,12 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
-from mt5_backtest_sim.domain.enums import OperationType, SimulationState
+from mt5_backtest_sim.domain.enums import OperationType, SimulationState, Timeframe
 from mt5_backtest_sim.domain.models import Account, Operation, Order, Tick
 from mt5_backtest_sim.domain.value_objects import Money
 from mt5_backtest_sim.execution.broker import SimulatedBroker
 from mt5_backtest_sim.market_data.feeder import TickFeeder
+from mt5_backtest_sim.simulation.chart import Chart
 from mt5_backtest_sim.simulation.settings import SimulationSettings
 from mt5_backtest_sim.strategy.base import StrategyContext
 
@@ -65,6 +66,7 @@ class SimulationEngine:
         settings: SimulationSettings,
         equity_sample_seconds: int = 1,
         max_equity_points: int = 200_000,
+        timeframes: tuple[Timeframe, ...] = (Timeframe.M1,),
     ) -> None:
         self.broker = broker
         self.feeder = feeder
@@ -79,6 +81,16 @@ class SimulationEngine:
         self._max_equity_points = max_equity_points
         self._equity_interval = self._equity_sample_seconds
         self._last_equity_second = -(1 << 62)
+        self.timeframes = timeframes
+        self.charts: dict[tuple[str, Timeframe], Chart] = {
+            (name, timeframe): Chart(state, timeframe)
+            for name, state in broker.symbols.items()
+            for timeframe in timeframes
+        }
+
+    def chart(self, symbol: str, timeframe: Timeframe = Timeframe.M1) -> Chart:
+        """The chart of one symbol in one timeframe."""
+        return self.charts[(symbol, timeframe)]
 
     # ----------------------------------------------------------------- wiring
 
@@ -155,6 +167,8 @@ class SimulationEngine:
         # this tick's price, then the strategy acts, then the broker resolves resting
         # orders and stop levels against the same quote.
         self.broker.apply_quote(tick)
+        for timeframe in self.timeframes:
+            self.charts[(tick.symbol, timeframe)].update(tick)
         for callback in self._subscribers:
             callback(tick)
         self.broker.process(tick)

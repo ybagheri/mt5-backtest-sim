@@ -38,11 +38,11 @@ src/mt5_backtest_sim/
   domain/         value objects, enums, models, exceptions  (no I/O, no clock)
   market_data/    tick sources: CSV, the .ctf container, and the multi-symbol feeder
   execution/      the simulated broker and the operation ledger
-  simulation/     the engine and its settings
+  simulation/     the engine, its settings and the bar aggregation
   strategy/       the strategy contract
   results/        statistics and HTML report rendering
   persistence/    settings and simulation save/load
-  integrations/   the MetaTrader 5 bridge
+  integrations/   the MetaTrader 5 bridge: protocol, pipe server, session, expert
   cli/            the command line entry point
 examples/         example strategies
 tools/            profiling and inspection helpers
@@ -68,7 +68,7 @@ Inspect a tick container:
     --ticks "C:\path\to\sim_ticks_EURUSD.ctf" --count
 ```
 
-Replay a history through a strategy and write a report:
+Replay a history through a strategy, save the run and write a report:
 
 ```bash
 .venv\Scripts\python -m mt5_backtest_sim.cli.main run \
@@ -76,7 +76,14 @@ Replay a history through a strategy and write a report:
     --strategy "examples.ma_crossover:MovingAverageCrossover" \
     --start 2022-01-03T00:00:00Z --end 2022-06-30T00:00:00Z \
     --balance 10000 --leverage 100 --commission 3.5 \
-    --report out/report.html --json out/summary.json
+    --save out/run.sim --report out/report.html --json out/summary.json
+```
+
+Reopen a saved run and render its report again:
+
+```bash
+.venv\Scripts\python -m mt5_backtest_sim.cli.main report \
+    --run out/run.sim --out out/report.html
 ```
 
 A strategy is any object with an `on_tick(tick, context)` method:
@@ -88,6 +95,34 @@ class MyStrategy:
             context.broker.open_market_order(
                 tick.symbol, OrderType.BUY, Volume.from_lots("0.10")
             )
+```
+
+## Saving and reopening a run
+
+A run is written as a gzip-compressed UTF-8 JSON document, the same container the
+reference product uses for its `.sim` files. Money is stored as a decimal *string*,
+never as a JSON number, so a run reopens with exactly the numbers it was saved with.
+The settings file, `simulator_settings.dat`, uses the same container.
+
+## The MetaTrader 5 bridge
+
+The simulator and the terminal talk over a Windows named pipe. The simulator owns the
+pipe; the expert advisor connects to it. The wire format is documented in
+`integrations/mt5/protocol.py`: a 32 bit identifier followed by the payload, with
+little-endian integers and length-prefixed UTF-16 strings.
+
+The expert advisor in `integrations/mt5/ea/ForexSimulatorBridge.mq5` is part of this
+project. It answers the simulator's ping, answers ATR requests using the terminal's
+own calculation, and writes the simulated quotes and bars into the terminal's common
+folder so an indicator in the terminal sees the same market the simulator sees.
+
+Copy the expert into the terminal's `MQL5\Experts` folder and compile it with
+MetaEditor:
+
+```bash
+copy src\mt5_backtest_sim\integrations\mt5\ea\ForexSimulatorBridge.mq5 \
+     "%APPDATA%\MetaQuotes\Terminal\<hash>\MQL5\Experts\"
+"C:\Program Files\<broker>\MetaEditor64.exe" /compile:<path>\ForexSimulatorBridge.mq5
 ```
 
 ## The `.ctf` tick container
@@ -121,8 +156,11 @@ between the container and CSV without loss.
 
 ## Status
 
-Working end to end: tick replay, order lifecycle, statistics, HTML report.
+Working end to end: tick replay, order lifecycle, bar aggregation, statistics, HTML
+report, saving and reopening a run, and the MetaTrader 5 bridge with a compiled
+expert advisor.
 
-Not built yet: multi-timeframe bar aggregation, a persisted simulation format, a
-desktop user interface, the MetaTrader 5 bridge, and the data downloader that fetches
-history from the upstream providers.
+Not built yet: a data downloader that fetches history from the upstream providers, a
+desktop user interface, and a way to drive the terminal from the simulator in the
+other direction (the expert currently reads the simulated market, it does not trade
+on it yet).

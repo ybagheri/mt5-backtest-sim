@@ -25,6 +25,7 @@ from mt5_backtest_sim.execution.broker import SimulatedBroker
 from mt5_backtest_sim.market_data.csv_source import CsvTickSource
 from mt5_backtest_sim.market_data.ctf import CtfTickFile
 from mt5_backtest_sim.market_data.feeder import TickFeeder
+from mt5_backtest_sim.persistence.simulation_store import load_simulation, save_simulation
 from mt5_backtest_sim.results.report_html import render_report
 from mt5_backtest_sim.results.statistics import compute_statistics
 from mt5_backtest_sim.simulation.engine import SimulationEngine
@@ -174,6 +175,10 @@ def command_run(args: argparse.Namespace) -> int:
         _write(Path(args.report), report)
         print(f"report written: {args.report}")
 
+    if getattr(args, "save", None):
+        path = save_simulation(result, args.save)
+        print(f"run saved     : {path}")
+
     return 0
 
 
@@ -184,9 +189,21 @@ def _write(path: Path, content: str) -> None:
 
 
 def command_report(args: argparse.Namespace) -> int:
-    """Placeholder for rendering a report from a saved run."""
-    print("report rendering from a saved run is not implemented yet")
-    return 1
+    """Render a report from a saved run."""
+    saved = load_simulation(args.run)
+    statistics = compute_statistics(saved.closed_orders, saved.account, saved.equity_curve)
+    report = render_report(
+        statistics,
+        saved.closed_orders,
+        saved.operations,
+        title=args.title or f"{Path(args.run).stem} backtest",
+    )
+    _write(Path(args.out), report)
+    print(f"state        : {saved.state}")
+    print(f"closed trades: {statistics.total_trades}")
+    print(f"net profit   : {statistics.net_profit}")
+    print(f"report written: {args.out}")
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -225,6 +242,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--commission", default="0", help="commission per lot")
     run.add_argument("--report", help="write an HTML report to this path")
     run.add_argument("--json", help="write a JSON summary to this path")
+    run.add_argument("--save", help="save the run to this file, so it can be reopened")
     run.add_argument(
         "--keep-open",
         action="store_true",
@@ -234,6 +252,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     report = subparsers.add_parser("report", help="render a report from a saved run")
     report.add_argument("--run", required=True, help="saved run file")
+    report.add_argument("--out", required=True, help="write the HTML report to this path")
+    report.add_argument("--title", help="title of the report")
     report.set_defaults(handler=command_report)
 
     return parser
