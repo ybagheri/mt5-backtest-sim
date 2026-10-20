@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.eggs/
+
+# Environments
+.venv/
+venv/
+env/
+
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pytest-tmp/
+.coverage
+htmlcov/
+
+# Project output
+out/
+.fsim-out/
+data/
+*.ctf
+*.sim
+
+# Editors and operating systems
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

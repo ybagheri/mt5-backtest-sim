@@ -1,0 +1,120 @@
+[build-system]
+requires = ["setuptools>=77.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mt5-backtest-sim"
+version = "0.1.0"
+description = "Tick-driven MetaTrader 5 style backtesting simulator: engine, statistics, reporting and MT5 bridge"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "Yaser Bagheri", email = "ybagheir83@gmail.com" }]
+
+# The core is stdlib-only on purpose. The domain model, the execution semantics, the
+# statistics engine and the reporting layer must be importable and testable on any
+# machine with no broker software, no terminal and no native dependency.
+dependencies = []
+
+[project.optional-dependencies]
+# Live and demo MetaTrader 5 execution. Broker-supplied binary package.
+mt5 = ["MetaTrader5>=5.0.45"]
+# Phase 2 analysis helpers. Not required to run the backtest engine itself.
+analysis = ["numpy>=1.26", "pandas>=2.0"]
+# Phase 3 sweeps.
+research = ["numpy>=1.26", "pandas>=2.0", "scipy>=1.11"]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "hypothesis>=6.100",
+    "ruff>=0.6",
+    "mypy>=1.11",
+]
+
+[project.scripts]
+mt5-backtest-sim = "mt5_backtest_sim.cli.main:main"
+
+[project.urls]
+Homepage = "https://github.com/ybagheri/mt5-backtest-sim"
+Repository = "https://github.com/ybagheri/mt5-backtest-sim"
+Issues = "https://github.com/ybagheri/mt5-backtest-sim/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+pythonpath = ["src", "scripts"]
+testpaths = ["tests"]
+addopts = "-q --strict-markers --strict-config"
+markers = [
+    "integration: exercises more than one component; still hermetic",
+    "mt5: requires a reachable MetaTrader 5 terminal; skipped by default",
+    "live: may touch a real broker account; never enabled by default",
+]
+filterwarnings = ["error::DeprecationWarning:mt5_backtest_sim.*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # import sorting
+    "UP",   # pyupgrade
+    "B",    # bugbear
+    "C4",   # comprehensions
+    "SIM",  # simplify
+    "RUF",  # ruff-specific
+    "ARG",  # unused arguments
+    "PTH",  # pathlib
+    "TID",  # tidy imports
+    "A",    # builtin shadowing
+]
+ignore = [
+    "E501",    # line length is handled by the formatter, not the linter
+    "B008",    # function call in default argument — used for DI sentinels
+    "RUF012",  # mutable class attributes need ClassVar annotations, not a blanket ban
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["ARG001", "ARG002", "S101"]
+# Every subcommand implements one uniform Handler signature, so an individual command
+# legitimately ignores the parameters it has no use for.
+"src/mt5_backtest_sim/cli/main.py" = ["ARG001", "ARG002"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["mt5_backtest_sim"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unreachable = true
+show_error_codes = true
+pretty = true
+mypy_path = ["src", "scripts"]
+files = ["src", "tests"]
+
+[[tool.mypy.overrides]]
+# MetaTrader5 ships no type information. It is confined to the mt5 adapter and
+# scripts/check_architecture.py enforces that boundary.
+module = ["MetaTrader5.*", "MetaTrader5"]
+ignore_missing_imports = true
+
+[tool.coverage.run]
+source = ["mt5_backtest_sim"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "\\.\\.\\.",
+]
