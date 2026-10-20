@@ -19,6 +19,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+from mt5_backtest_sim.domain.exceptions import SimulationError
 from mt5_backtest_sim.domain.models import Account, SymbolSpec, SymbolState
 from mt5_backtest_sim.domain.value_objects import Money
 from mt5_backtest_sim.execution.broker import SimulatedBroker
@@ -84,6 +85,31 @@ def command_download(args: argparse.Namespace) -> int:
     path, written = download_ticks(symbol, start, end, target)
     print(f"ticks     : {written:,}")
     print(f"written   : {path}")
+    return 0
+
+
+def command_bridge(args: argparse.Namespace) -> int:
+    """Talk to the expert advisor in the terminal over the named pipe."""
+    from mt5_backtest_sim.integrations.mt5.session import Mt5Session
+
+    print(f"waiting for the expert on the pipe {args.pipe} ...")
+    session = Mt5Session(pipe_name=args.pipe)
+    try:
+        session.connect()
+    except SimulationError as exc:
+        print(f"no expert answered: {exc}")
+        return 1
+
+    print("the expert is connected")
+    with session:
+        if not session.ping():
+            print("the expert did not answer the ping")
+            return 1
+        print("ping: answered")
+
+        symbol = args.symbol
+        atr = session.request_atr(symbol, args.timeframe, args.atr_period)
+        print(f"ATR({symbol}, {args.atr_period}): {atr:.8f}")
     return 0
 
 
@@ -289,6 +315,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="folder for the .ctf file; defaults to the reference data folder",
     )
     download.set_defaults(handler=command_download)
+
+    bridge = subparsers.add_parser(
+        "bridge", help="talk to the expert advisor in the terminal"
+    )
+    bridge.add_argument("--pipe", default="mt5_backtest_sim", help="named pipe name")
+    bridge.add_argument("--symbol", default="EURUSD", help="symbol for the ATR request")
+    bridge.add_argument("--timeframe", type=int, default=1, help="timeframe in minutes")
+    bridge.add_argument("--atr-period", type=int, default=14, help="ATR period")
+    bridge.set_defaults(handler=command_bridge)
 
     return parser
 
