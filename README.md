@@ -127,7 +127,8 @@ little-endian integers and length-prefixed UTF-16 strings.
 The expert advisor in `integrations/mt5/ea/ForexSimulatorBridge.mq5` is part of this
 project. It answers the simulator's ping, answers ATR requests using the terminal's
 own calculation, and writes the simulated quotes and bars into the terminal's common
-folder so an indicator in the terminal sees the same market the simulator sees.
+folder (`sim_quotes.csv` and `sim_bars_<symbol>.csv`) so an indicator or a script in
+the terminal can read the same market the simulator sees.
 
 Copy the expert into the terminal's `MQL5\Experts` folder and compile it with
 MetaEditor:
@@ -137,6 +138,26 @@ copy src\mt5_backtest_sim\integrations\mt5\ea\ForexSimulatorBridge.mq5 \
      "%APPDATA%\MetaQuotes\Terminal\<hash>\MQL5\Experts\"
 "C:\Program Files\<broker>\MetaEditor64.exe" /compile:<path>\ForexSimulatorBridge.mq5
 ```
+
+### Checking the bridge against a live terminal
+
+1. Start the terminal and let it log in.
+2. Attach `ForexSimulatorBridge` to any chart: drag it from the Navigator onto the
+   chart, or right click the chart and pick *Expert Advisor*.
+3. Run the check:
+
+```bash
+.venv\Scripts\python -m mt5_backtest_sim.cli.main bridge --pipe mt5_backtest_sim
+```
+
+The simulator creates the named pipe and waits for the expert. The expert connects,
+answers the ping and answers an ATR request for EURUSD. The terminal writes its own
+side of the conversation to the `MQL5\Logs` journal.
+
+The expert of this build cannot push the simulated prices onto the chart itself: the
+MetaTrader 5 build installed here does not offer the custom symbol tick interface,
+so the simulated market is written to the common folder instead of being injected
+into a chart.
 
 ## The `.ctf` tick container
 

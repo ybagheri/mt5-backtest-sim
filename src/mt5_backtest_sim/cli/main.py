@@ -113,6 +113,52 @@ def command_bridge(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_live(args: argparse.Namespace) -> int:
+    """Replay a history and push the market to the terminal."""
+    from mt5_backtest_sim.integrations.mt5.live_bridge import LiveBridge
+    from mt5_backtest_sim.integrations.mt5.session import Mt5Session
+
+    spec = _symbol_spec(args)
+    state = _build_symbol(spec)
+    source = _open_source(args)
+    feeder = TickFeeder([source])
+
+    account = Account(
+        initial_balance=Money(Decimal(args.balance)),
+        balance=Money(Decimal(args.balance)),
+        leverage=args.leverage,
+    )
+    broker = SimulatedBroker(account, {spec.name: state})
+    engine = SimulationEngine(broker, feeder, SimulationSettings())
+
+    print(f"waiting for the expert on the pipe {args.pipe} ...", flush=True)
+    session = Mt5Session(pipe_name=args.pipe)
+    try:
+        session.connect(timeout_ms=args.timeout * 1000)
+    except TimeoutError:
+        print("no expert connected in time")
+        return 1
+    except SimulationError as exc:
+        print(f"no expert answered: {exc}")
+        return 1
+
+    print("the expert is connected", flush=True)
+    bridge = LiveBridge(session=session, symbol=spec.name)
+    bridge.start()
+
+    with session:
+        engine.subscribe(bridge.on_tick)
+        started = datetime.now(UTC)
+        end = _parse_moment(getattr(args, "end", None))
+        engine.run_all(until_time=end, close_at_end=False)
+        elapsed = (datetime.now(UTC) - started).total_seconds()
+
+    print(f"ticks replayed : {engine.ticks_processed:,}")
+    print(f"elapsed        : {elapsed:.1f}s")
+    print(bridge.report())
+    return 0
+
+
 def _parse_moment(text: str | None) -> datetime | None:
     """Parse an ISO 8601 timestamp into UTC."""
     if not text:
@@ -324,6 +370,18 @@ def build_parser() -> argparse.ArgumentParser:
     bridge.add_argument("--timeframe", type=int, default=1, help="timeframe in minutes")
     bridge.add_argument("--atr-period", type=int, default=14, help="ATR period")
     bridge.set_defaults(handler=command_bridge)
+
+    live = subparsers.add_parser(
+        "live", help="replay a history and push the market to the terminal"
+    )
+    add_common(live)
+    live.add_argument("--pipe", default="mt5_backtest_sim", help="named pipe name")
+    live.add_argument("--balance", default="10000", help="starting balance")
+    live.add_argument("--leverage", type=int, default=100)
+    live.add_argument(
+        "--timeout", type=int, default=120, help="seconds to wait for the expert"
+    )
+    live.set_defaults(handler=command_live)
 
     return parser
 
