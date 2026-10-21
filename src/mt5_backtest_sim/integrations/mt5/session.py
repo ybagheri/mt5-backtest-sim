@@ -34,10 +34,17 @@ class Mt5Session:
     pipe_name: str
     server: PipeServer | None = None
 
-    def connect(self) -> None:
-        """Wait for the expert to connect."""
+    def connect(self, timeout_ms: int | None = None) -> None:
+        """Wait for the expert to connect.
+
+        Calling this twice is a no-op: a session that is already connected stays
+        connected, so a caller may write ``session.connect()`` and then use the
+        session as a context manager without opening a second pipe.
+        """
+        if self.server is not None:
+            return
         self.server = PipeServer(self.pipe_name)
-        self.server.listen()
+        self.server.listen(timeout_ms=timeout_ms)
 
     def close(self) -> None:
         """Close the pipe."""

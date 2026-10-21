@@ -144,3 +144,35 @@ def test_the_server_reports_a_disconnected_client() -> None:
     thread.join(timeout=5)
 
     assert outcome == [None]
+
+
+def test_the_wait_for_an_expert_is_bounded() -> None:
+    server = PipeServer("mt5_backtest_sim_test_timeout")
+    started = time.monotonic()
+    with pytest.raises(TimeoutError):
+        server.listen(timeout_ms=1500)
+    assert time.monotonic() - started < 10
+
+
+def test_a_busy_pipe_is_reported() -> None:
+    # The expert may still hold the pipe open when the simulator restarts.
+    name = "mt5_backtest_sim_test_busy"
+    first = PipeServer(name)
+
+    def serve() -> None:
+        first.listen()
+
+    thread = threading.Thread(target=serve, daemon=True)
+    thread.start()
+    client = PipeClient(name)
+    client.connect()
+    thread.join(timeout=5)
+
+    try:
+        second = PipeServer(name)
+        with pytest.raises(SimulationError) as error:
+            second.listen(timeout_ms=500)
+        assert "pipe" in str(error.value).lower()
+    finally:
+        client.close()
+        first.close()

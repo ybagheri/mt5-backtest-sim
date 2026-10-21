@@ -15,7 +15,7 @@ from pathlib import Path
 
 sys.path.insert(0, "src")
 
-from mt5_backtest_sim.integrations.mt5.session import Mt5Session  # noqa: E402
+from mt5_backtest_sim.integrations.mt5.session import Mt5Session
 
 TERMINAL = Path(r"C:\Program Files\Alpari MT5_2\terminal64.exe")
 CONFIG = Path(__file__).resolve().parent / "mt5_bridge_test.ini"
@@ -32,7 +32,7 @@ def main() -> int:
                 outcome["connected"] = True
                 outcome["ping"] = session.ping()
                 outcome["atr"] = session.request_atr("EURUSD", 1, 14)
-        except Exception as exc:  # noqa: BLE001 - the report needs the reason
+        except Exception as exc:
             outcome["error"] = f"{type(exc).__name__}: {exc}"
 
     thread = threading.Thread(target=serve, daemon=True)

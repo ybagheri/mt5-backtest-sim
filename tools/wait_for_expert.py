@@ -13,10 +13,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from mt5_backtest_sim.integrations.mt5.session import Mt5Session  # noqa: E402
+from mt5_backtest_sim.integrations.mt5.session import Mt5Session
 
 PIPE = "mt5_backtest_sim"
-WAIT_SECONDS = 300
+WAIT_SECONDS = int(sys.argv[1]) if len(sys.argv) > 1 else 300
 
 
 def main() -> int:
@@ -25,8 +25,11 @@ def main() -> int:
     session = Mt5Session(pipe_name=PIPE)
     started = time.monotonic()
     try:
-        session.connect()
-    except Exception as exc:  # noqa: BLE001 - the report needs the reason
+        session.connect(timeout_ms=WAIT_SECONDS * 1000)
+    except TimeoutError:
+        print("no expert connected in time")
+        return 1
+    except Exception as exc:
         print(f"no expert answered: {type(exc).__name__}: {exc}")
         return 1
 

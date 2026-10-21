@@ -168,6 +168,9 @@ int ReadMessage(uchar &data[])
    if(FileIsEnding(g_file))
      {
       Print("Bridge: the simulator closed the pipe");
+      // The handle has to be released, or the pipe stays busy and a restarted
+      // simulator cannot open it.
+      FileClose(g_file);
       g_file = INVALID_HANDLE;
       return -1;
      }
@@ -386,6 +389,16 @@ void OnDeinit(const int reason)
 //+------------------------------------------------------------------+
 void OnTimer()
   {
+   if(g_file == INVALID_HANDLE)
+     {
+      // The simulator went away. Keep trying, so a restarted simulator is
+      // picked up without the chart having to be touched again.
+      static uint attempts = 0;
+      attempts++;
+      if(attempts % 10 == 0)
+         ConnectPipe();
+      return;
+     }
    uchar data[];
    int message_id = ReadMessage(data);
    if(message_id >= 0)
